@@ -1,0 +1,80 @@
+---
+title: "ds2_hw1"
+author: "Jinghan Liu"
+date: "2/21/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(corrplot)
+library(plotmo)
+library(Matrix)
+knitr::opts_chunk$set(
+  fig.width = 12,
+  fig.asp = .6,
+  out.width = "90%",
+  message = FALSE,
+  warning = FALSE)
+```
+
+## Fit a linear model using least squares on the training data. Is there any potential disadvantage of this model?
+```{r cars}
+# Import data
+training_data = read_csv("./data/housing_training.csv") %>% 
+janitor::clean_names() 
+training_data = na.omit(training_data)
+test_data = read_csv("./data/housing_test.csv") %>% 
+janitor::clean_names()
+test_data = na.omit(test_data)
+
+
+train_x = model.matrix(sale_price ~ ., training_data)[ ,-1]
+train_y <- training_data$sale_price
+test_x <- model.matrix(sale_price ~ ., test_data)[ ,-1]
+test_y <- test_data$sale_price
+
+corrplot(cor(train_x),type = "full", tl.cex = .7)
+
+#fit a linear model using least squares
+set.seed(123)
+fit.lm = train(sale_price ~ ., 
+                data = training_data,
+                method = "lm",
+                trControl = trainControl(method = "cv", number = 10))
+summary(fit.lm)
+
+```
+
+**Potential Disadvantage:**
+1. Least squares is highly sensitive to outliers because it simply minimizes the redisuals for each data point
+2. With some collinear covariates, when the two predictors are highly correlated, the variance of the estimated function increases, resulting in higher MSE and lower prediction accuracy.
+3. The model has an overfitting problem
+
+
+
+## Fit a lasso model on the training data and report the test error. When the 1SE rule is applied, how many predictors are included in the model?
+
+
+```{r, echo=FALSE}
+#fit a lasso model
+set.seed(123)
+cv_lasso = cv.glmnet(train_x, train_y,
+                     standardize = TRUE,
+                      alpha = 1,
+                      lambda = exp(seq(8, -1, length = 100)))
+
+plot(cv_lasso)
+
+#number of predictors are included in model
+predict(cv_lasso,s = cv_lasso$lambda.1se, type = "coefficients")
+
+# test error
+lasso_rmse = RMSE(pred = predict(cv_lasso, newx = test_x, 
+                      s = "lambda.min", type = "response"), obs = test_y)
+
+```
+
+
