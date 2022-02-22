@@ -12,6 +12,7 @@ library(glmnet)
 library(corrplot)
 library(plotmo)
 library(Matrix)
+library(pls)
 knitr::opts_chunk$set(
   fig.width = 12,
   fig.asp = .6,
@@ -46,6 +47,11 @@ fit.lm = train(sale_price ~ .,
                 trControl = trainControl(method = "cv", number = 10))
 summary(fit.lm)
 
+#test error
+lm_pred = predict(fit.lm, newdata = test_data)
+lm_test_error = mean(RMSE(lm_pred, test_y)^2)
+lm_test_error
+
 ```
 
 **Potential Disadvantage:**
@@ -68,13 +74,72 @@ cv_lasso = cv.glmnet(train_x, train_y,
 
 plot(cv_lasso)
 
-#number of predictors are included in model
-predict(cv_lasso,s = cv_lasso$lambda.1se, type = "coefficients")
+# Trace plot
+plot_glmnet(cv_lasso$glmnet.fit)
 
 # test error
-lasso_rmse = RMSE(pred = predict(cv_lasso, newx = test_x, 
-                      s = "lambda.min", type = "response"), obs = test_y)
+pred_test = predict(cv_lasso, newx = test_x)
+test_error_lasso = mean(RMSE(pred_test,test_y)^2)
+
+#number of predictor
+
 
 ```
+**The test error is 419444009 and the number of predictor included in ths model is xxx.**
 
 
+## Fit an elastic net model on the training data. Report the selected tuning parameters and the test error.
+```{r}
+set.seed(123)
+enet_fit = train(train_x, train_y,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(8, -3, length = 50))),
+                  trControl = trainControl(method = "repeatedcv", number = 10, repeats = 5))
+enet_fit$bestTune
+# Set rainbow color
+myCol<- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol),
+                    superpose.line = list(col = myCol))
+plot(enet.fit, par.settings = myPar)
+coef(enet.fit$finalModel, enet.fit$bestTune$lambda)
+
+
+#test error
+
+pred_test_ela = predict(enet_fit, newdata = test_x)
+test_error_ela = mean(RMSE(pred_test_ela,test_y)^2)
+```
+**The tuning parameter of alpha is 0.05 and the parameter of lambda is 619.2886.
+The test error is 438209306.
+
+
+## Fit a partial least squares model on the training data and report the test error. How many components are included in your model?
+```{r}
+# fit model
+set.seed(123)
+pls.mod = plsr(sale_price~., 
+                data = training_data, 
+                scale = TRUE,  
+                validation = "CV")
+summary(pls.mod)
+validationplot(pls.mod, val.type="MSEP", legendpos = "topright")
+
+
+# num of components
+cv.mse <- RMSEP(pls.mod)
+ncomp.cv <- which.min(cv.mse$val[1,,])-1 # extract the response and delete the 0th component
+ncomp.cv
+
+
+# test error
+pls_pred = predict(pls.mod, newdata = test_x, 
+                      ncomp = ncomp.cv)
+pls_test_error = mean(RMSE(test_y, pls_pred)^2)
+pls_test_error
+```
+**The test error is 440217938 ans there are 8 components are included in the model.**
+
+## Which model will you choose for predicting the response? Why?
+
+**From the above analysis we can obtain the linear model MSE is 447287652; lasso model MSE is 419444009; elastic net model MSE is 438209306; pls model MSE is 440217938.I will choose lasso model for predicting the response because it has the smallest MSE which means it has highest accurency and effiency.**
